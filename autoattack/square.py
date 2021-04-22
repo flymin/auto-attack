@@ -233,7 +233,7 @@ class SquareAttack():
                 s_init = int(math.sqrt(self.p_init * n_features / c))
                 
                 for i_iter in range(self.n_queries):
-                    idx_to_fool = (margin_min > 0.0).nonzero().squeeze()
+                    idx_to_fool = (margin_min > 0.0).nonzero(as_tuple=False).squeeze()
                     
                     x_curr = self.check_shape(x[idx_to_fool])
                     x_best_curr = self.check_shape(x_best[idx_to_fool])
@@ -278,7 +278,7 @@ class SquareAttack():
                         1. - idx_improved) * x_best_curr
                     n_queries[idx_to_fool] += 1.
 
-                    ind_succ = (margin_min <= 0.).nonzero().squeeze()
+                    ind_succ = (margin_min <= 0.).nonzero(as_tuple=False).squeeze()
                     if self.verbose and ind_succ.numel() != 0:
                         print('{}'.format(i_iter + 1),
                             '- success rate={}/{} ({:.2%})'.format(
@@ -314,7 +314,7 @@ class SquareAttack():
                 s_init = int(math.sqrt(self.p_init * n_features / c))
 
                 for i_iter in range(self.n_queries):
-                    idx_to_fool = (margin_min > 0.0).nonzero().squeeze()
+                    idx_to_fool = (margin_min > 0.0).nonzero(as_tuple=False).squeeze()
 
                     x_curr = self.check_shape(x[idx_to_fool])
                     x_best_curr = self.check_shape(x_best[idx_to_fool])
@@ -388,7 +388,7 @@ class SquareAttack():
                         1. - idx_improved) * x_best_curr
                     n_queries[idx_to_fool] += 1.
 
-                    ind_succ = (margin_min <= 0.).nonzero().squeeze()
+                    ind_succ = (margin_min <= 0.).nonzero(as_tuple=False).squeeze()
                     if self.verbose and ind_succ.numel() != 0:
                         print('{}'.format(i_iter + 1),
                             '- success rate={}/{} ({:.2%})'.format(
@@ -429,7 +429,7 @@ class SquareAttack():
                 s_init = int(math.sqrt(self.p_init * n_features / c))
 
                 for i_iter in range(self.n_queries):
-                    idx_to_fool = (margin_min > 0.0).nonzero().squeeze()
+                    idx_to_fool = (margin_min > 0.0).nonzero(as_tuple=False).squeeze()
 
                     x_curr = self.check_shape(x[idx_to_fool])
                     x_best_curr = self.check_shape(x_best[idx_to_fool])
@@ -506,7 +506,7 @@ class SquareAttack():
                         1. - idx_improved) * x_best_curr
                     n_queries[idx_to_fool] += 1.
 
-                    ind_succ = (margin_min <= 0.).nonzero().squeeze()
+                    ind_succ = (margin_min <= 0.).nonzero(as_tuple=False).squeeze()
                     if self.verbose and ind_succ.numel() != 0:
                         print('{}'.format(i_iter + 1),
                             '- success rate={}/{} ({:.2%})'.format(
@@ -568,7 +568,7 @@ class SquareAttack():
         torch.cuda.random.manual_seed(self.seed)
 
         for counter in range(self.n_restarts):
-            ind_to_fool = acc.nonzero().squeeze()
+            ind_to_fool = acc.nonzero(as_tuple=False).squeeze()
             if len(ind_to_fool.shape) == 0:
                 ind_to_fool = ind_to_fool.unsqueeze(0)
             if ind_to_fool.numel() != 0:
@@ -582,7 +582,7 @@ class SquareAttack():
                     acc_curr = output_curr.max(1)[1] == y_to_fool
                 else:
                     acc_curr = output_curr.max(1)[1] != y_to_fool
-                ind_curr = (acc_curr == 0).nonzero().squeeze()
+                ind_curr = (acc_curr == 0).nonzero(as_tuple=False).squeeze()
 
                 acc[ind_to_fool[ind_curr]] = 0
                 adv[ind_to_fool[ind_curr]] = adv_curr[ind_curr].clone()

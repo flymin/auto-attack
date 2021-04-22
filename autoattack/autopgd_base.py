@@ -45,7 +45,7 @@ def L1_projection(x2, y2, eps1):
     
     c = eps1 - y.clone().abs().sum(dim=1)
     c5 = s1 + c < 0
-    c2 = c5.nonzero().squeeze(1)
+    c2 = c5.nonzero(as_tuple=False).squeeze(1)
     
     s = s1.unsqueeze(-1) + torch.cumsum((bs2 - bs) * size1, dim=1)
     
@@ -65,8 +65,8 @@ def L1_projection(x2, y2, eps1):
         counter2 = counter4.type(torch.LongTensor)
         
         c8 = s[c2, counter2] + c[c2] < 0
-        ind3 = c8.nonzero().squeeze(1)
-        ind32 = (~c8).nonzero().squeeze(1)
+        ind3 = c8.nonzero(as_tuple=False).squeeze(1)
+        ind32 = (~c8).nonzero(as_tuple=False).squeeze(1)
         #print(ind3.shape)
         if ind3.nelement != 0:
             lb[ind3] = counter4[ind3]
@@ -386,7 +386,7 @@ class APGDAttack():
             pred = logits.detach().max(1)[1] == y
             acc = torch.min(acc, pred)
             acc_steps[i + 1] = acc + 0
-            ind_pred = (pred == 0).nonzero().squeeze()
+            ind_pred = (pred == 0).nonzero(as_tuple=False).squeeze()
             x_best_adv[ind_pred] = x_adv[ind_pred] + 0.
             if self.verbose:
                 str_stats = ' - step size: {:.5f} - topk: {:.2f}'.format(
@@ -399,7 +399,7 @@ class APGDAttack():
             with torch.no_grad():
               y1 = loss_indiv.detach().clone()
               loss_steps[i] = y1 + 0
-              ind = (y1 > loss_best).nonzero().squeeze()
+              ind = (y1 > loss_best).nonzero(as_tuple=False).squeeze()
               x_best[ind] = x_adv[ind].clone()
               grad_best[ind] = grad[ind].clone()
               loss_best[ind] = y1[ind] + 0
@@ -419,7 +419,7 @@ class APGDAttack():
                       loss_best_last_check = loss_best.clone()
     
                       if fl_oscillation.sum() > 0:
-                          ind_fl_osc = (fl_oscillation > 0).nonzero().squeeze()
+                          ind_fl_osc = (fl_oscillation > 0).nonzero(as_tuple=False).squeeze()
                           step_size[ind_fl_osc] /= 2.0
                           n_reduced = fl_oscillation.sum()
     
@@ -503,7 +503,7 @@ class APGDAttack():
             torch.cuda.random.manual_seed(self.seed)
 
             for counter in range(self.n_restarts):
-                ind_to_fool = acc.nonzero().squeeze()
+                ind_to_fool = acc.nonzero(as_tuple=False).squeeze()
                 if len(ind_to_fool.shape) == 0:
                     ind_to_fool = ind_to_fool.unsqueeze(0)
                 if ind_to_fool.numel() != 0:
@@ -516,7 +516,7 @@ class APGDAttack():
                     else:
                         res_curr = self.decr_eps_pgd(x_to_fool, y_to_fool, epss, iters)
                     best_curr, acc_curr, loss_curr, adv_curr = res_curr
-                    ind_curr = (acc_curr == 0).nonzero().squeeze()
+                    ind_curr = (acc_curr == 0).nonzero(as_tuple=False).squeeze()
 
                     acc[ind_to_fool[ind_curr]] = 0
                     adv[ind_to_fool[ind_curr]] = adv_curr[ind_curr].clone()
@@ -534,7 +534,7 @@ class APGDAttack():
                 self.device) * (-float('inf'))
             for counter in range(self.n_restarts):
                 best_curr, _, loss_curr, _ = self.attack_single_run(x, y)
-                ind_curr = (loss_curr > loss_best).nonzero().squeeze()
+                ind_curr = (loss_curr > loss_best).nonzero(as_tuple=False).squeeze()
                 adv_best[ind_curr] = best_curr[ind_curr] + 0.
                 loss_best[ind_curr] = loss_curr[ind_curr] + 0.
 
@@ -658,7 +658,7 @@ class APGDAttack_targeted(APGDAttack):
         
         for target_class in range(2, self.n_target_classes + 2):
             for counter in range(self.n_restarts):
-                ind_to_fool = acc.nonzero().squeeze()
+                ind_to_fool = acc.nonzero(as_tuple=False).squeeze()
                 if len(ind_to_fool.shape) == 0:
                     ind_to_fool = ind_to_fool.unsqueeze(0)
                 if ind_to_fool.numel() != 0:
@@ -676,7 +676,7 @@ class APGDAttack_targeted(APGDAttack):
                     else:
                         res_curr = self.decr_eps_pgd(x_to_fool, y_to_fool, epss, iters)
                     best_curr, acc_curr, loss_curr, adv_curr = res_curr
-                    ind_curr = (acc_curr == 0).nonzero().squeeze()
+                    ind_curr = (acc_curr == 0).nonzero(as_tuple=False).squeeze()
 
                     acc[ind_to_fool[ind_curr]] = 0
                     adv[ind_to_fool[ind_curr]] = adv_curr[ind_curr].clone()

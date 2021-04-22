@@ -107,7 +107,7 @@ class FABAttack():
             print('Clean accuracy: {:.2%}'.format(pred.float().mean()))
         if pred.sum() == 0:
             return x
-        pred = self.check_shape(pred.nonzero().squeeze())
+        pred = self.check_shape(pred.nonzero(as_tuple=False).squeeze())
 
         if is_targeted:
             output = self._predict_fn(x)
@@ -232,7 +232,7 @@ class FABAttack():
                     is_adv = self._get_predicted_label(x1) != la2
 
                     if is_adv.sum() > 0:
-                        ind_adv = is_adv.nonzero().squeeze()
+                        ind_adv = is_adv.nonzero(as_tuple=False).squeeze()
                         ind_adv = self.check_shape(ind_adv)
                         if self.norm == 'Linf':
                             t = (x1[ind_adv] - im2[ind_adv]).reshape(
@@ -264,7 +264,7 @@ class FABAttack():
                   .format(time.time() - startt))
 
         res_c[pred] = res2 * ind_succ.float() + 1e10 * (1 - ind_succ.float())
-        ind_succ = self.check_shape(ind_succ.nonzero().squeeze())
+        ind_succ = self.check_shape(ind_succ.nonzero(as_tuple=False).squeeze())
         adv_c[pred[ind_succ]] = adv[ind_succ].clone()
 
         return adv_c
@@ -283,7 +283,7 @@ class FABAttack():
 
             if not self.targeted:
                 for counter in range(self.n_restarts):
-                    ind_to_fool = acc.nonzero().squeeze()
+                    ind_to_fool = acc.nonzero(as_tuple=False).squeeze()
                     if len(ind_to_fool.shape) == 0: ind_to_fool = ind_to_fool.unsqueeze(0)
                     if ind_to_fool.numel() != 0:
                         x_to_fool, y_to_fool = x[ind_to_fool].clone(), y[ind_to_fool].clone()
@@ -298,7 +298,7 @@ class FABAttack():
                             res = (x_to_fool - adv_curr).abs().reshape(x_to_fool.shape[0], -1).sum(-1)
                         acc_curr = torch.max(acc_curr, res > self.eps)
 
-                        ind_curr = (acc_curr == 0).nonzero().squeeze()
+                        ind_curr = (acc_curr == 0).nonzero(as_tuple=False).squeeze()
                         acc[ind_to_fool[ind_curr]] = 0
                         adv[ind_to_fool[ind_curr]] = adv_curr[ind_curr].clone()
 
@@ -310,7 +310,7 @@ class FABAttack():
                 for target_class in range(2, self.n_target_classes + 2):
                     self.target_class = target_class
                     for counter in range(self.n_restarts):
-                        ind_to_fool = acc.nonzero().squeeze()
+                        ind_to_fool = acc.nonzero(as_tuple=False).squeeze()
                         if len(ind_to_fool.shape) == 0: ind_to_fool = ind_to_fool.unsqueeze(0)
                         if ind_to_fool.numel() != 0:
                             x_to_fool, y_to_fool = x[ind_to_fool].clone(), y[ind_to_fool].clone()
@@ -325,7 +325,7 @@ class FABAttack():
                                 res = (x_to_fool - adv_curr).abs().reshape(x_to_fool.shape[0], -1).sum(-1)
                             acc_curr = torch.max(acc_curr, res > self.eps)
 
-                            ind_curr = (acc_curr == 0).nonzero().squeeze()
+                            ind_curr = (acc_curr == 0).nonzero(as_tuple=False).squeeze()
                             acc[ind_to_fool[ind_curr]] = 0
                             adv[ind_to_fool[ind_curr]] = adv_curr[ind_curr].clone()
 

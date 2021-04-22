@@ -125,7 +125,7 @@ class APGDAttack():
             pred = logits.detach().max(1)[1] == y
             acc = torch.min(acc, pred)
             acc_steps[i + 1] = acc + 0
-            x_best_adv[(pred == 0).nonzero().squeeze()] = x_adv[(pred == 0).nonzero().squeeze()] + 0.
+            x_best_adv[(pred == 0).nonzero(as_tuple=False).squeeze()] = x_adv[(pred == 0).nonzero(as_tuple=False).squeeze()] + 0.
             if self.verbose:
                 print('iteration: {} - Best loss: {:.6f}'.format(i, loss_best.sum()))
             
@@ -133,7 +133,7 @@ class APGDAttack():
             with torch.no_grad():
               y1 = loss_indiv.detach().clone()
               loss_steps[i] = y1.cpu() + 0
-              ind = (y1 > loss_best).nonzero().squeeze()
+              ind = (y1 > loss_best).nonzero(as_tuple=False).squeeze()
               x_best[ind] = x_adv[ind].clone()
               grad_best[ind] = grad[ind].clone()
               loss_best[ind] = y1[ind] + 0
@@ -183,12 +183,12 @@ class APGDAttack():
         
         else:
             for counter in range(self.n_restarts):
-                ind_to_fool = acc.nonzero().squeeze()
+                ind_to_fool = acc.nonzero(as_tuple=False).squeeze()
                 if len(ind_to_fool.shape) == 0: ind_to_fool = ind_to_fool.unsqueeze(0)
                 if ind_to_fool.numel() != 0:
                     x_to_fool, y_to_fool = x[ind_to_fool].clone(), y[ind_to_fool].clone()
                     best_curr, acc_curr, loss_curr, adv_curr = self.attack_single_run(x_to_fool, y_to_fool)
-                    ind_curr = (acc_curr == 0).nonzero().squeeze()
+                    ind_curr = (acc_curr == 0).nonzero(as_tuple=False).squeeze()
                     #
                     acc[ind_to_fool[ind_curr]] = 0
                     adv[ind_to_fool[ind_curr]] = adv_curr[ind_curr].clone()
@@ -312,7 +312,7 @@ class APGDAttack_targeted():
             pred = logits.detach().max(1)[1] == y
             acc = torch.min(acc, pred)
             acc_steps[i + 1] = acc + 0
-            x_best_adv[(pred == 0).nonzero().squeeze()] = x_adv[(pred == 0).nonzero().squeeze()] + 0.
+            x_best_adv[(pred == 0).nonzero(as_tuple=False).squeeze()] = x_adv[(pred == 0).nonzero(as_tuple=False).squeeze()] + 0.
             if self.verbose:
                 print('iteration: {} - Best loss: {:.6f}'.format(i, loss_best.sum()))
             
@@ -320,7 +320,7 @@ class APGDAttack_targeted():
             with torch.no_grad():
               y1 = loss_indiv.detach().clone()
               loss_steps[i] = y1.cpu() + 0
-              ind = (y1 > loss_best).nonzero().squeeze()
+              ind = (y1 > loss_best).nonzero(as_tuple=False).squeeze()
               x_best[ind] = x_adv[ind].clone()
               grad_best[ind] = grad[ind].clone()
               loss_best[ind] = y1[ind] + 0
@@ -372,12 +372,12 @@ class APGDAttack_targeted():
             for target_class in range(2, self.n_target_classes + 2):
                 self.target_class = target_class
                 for counter in range(self.n_restarts):
-                    ind_to_fool = acc.nonzero().squeeze()
+                    ind_to_fool = acc.nonzero(as_tuple=False).squeeze()
                     if len(ind_to_fool.shape) == 0: ind_to_fool = ind_to_fool.unsqueeze(0)
                     if ind_to_fool.numel() != 0:
                         x_to_fool, y_to_fool = x[ind_to_fool].clone(), y[ind_to_fool].clone()
                         best_curr, acc_curr, loss_curr, adv_curr = self.attack_single_run(x_to_fool, y_to_fool)
-                        ind_curr = (acc_curr == 0).nonzero().squeeze()
+                        ind_curr = (acc_curr == 0).nonzero(as_tuple=False).squeeze()
                         #
                         acc[ind_to_fool[ind_curr]] = 0
                         adv[ind_to_fool[ind_curr]] = adv_curr[ind_curr].clone()
