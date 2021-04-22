@@ -15,7 +15,7 @@ import time
 import torch
 from torch.autograd.gradcheck import zero_gradients
 
-from autoattack.fab_projections import projection_linf, projection_l2,\
+from .fab_projections import projection_linf, projection_l2,\
     projection_l1
 
 DEFAULT_EPS_DICT_BY_NORM = {'Linf': .3, 'L2': 1., 'L1': 5.0}

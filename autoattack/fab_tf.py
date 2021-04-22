@@ -16,7 +16,7 @@ import time
 
 import tensorflow as tf
 
-from autoattack.fab_base import FABAttack
+from .fab_base import FABAttack
 
 #from advertorch.utils import replicate_input
 

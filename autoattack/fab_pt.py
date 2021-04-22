@@ -15,7 +15,7 @@ import time
 import torch
 from torch.autograd.gradcheck import zero_gradients
 
-from autoattack.fab_base import FABAttack
+from .fab_base import FABAttack
 
 class FABAttack_PT(FABAttack):
     """
