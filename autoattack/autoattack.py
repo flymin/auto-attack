@@ -1,12 +1,12 @@
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-from torch.autograd import Variable
-import numpy as np
-import argparse
-import time
 import math
+import time
+
+import numpy as np
+import torch
+
 from .other_utils import Logger
+from . import checks
+
 
 class AutoAttack():
     def __init__(self, model, norm='Linf', eps=.3, seed=None, verbose=True,
@@ -23,11 +23,15 @@ class AutoAttack():
         self.is_tf_model = is_tf_model
         self.device = device
         self.logger = Logger(log_path)
+
+        if version in ['standard', 'plus', 'rand'] and attacks_to_run != []:
+            raise ValueError("attacks_to_run will be overridden unless you use version='custom'")
         
         if not self.is_tf_model:
             from .autopgd_base import APGDAttack
             self.apgd = APGDAttack(self.model, n_restarts=5, n_iter=100, verbose=False,
-                eps=self.epsilon, norm=self.norm, eot_iter=1, rho=.75, seed=self.seed, device=self.device)
+                eps=self.epsilon, norm=self.norm, eot_iter=1, rho=.75, seed=self.seed,
+                device=self.device, logger=self.logger)
             
             from .fab_pt import FABAttack_PT
             self.fab = FABAttack_PT(self.model, n_restarts=5, n_iter=100, eps=self.epsilon, seed=self.seed,
@@ -39,13 +43,14 @@ class AutoAttack():
                 
             from .autopgd_base import APGDAttack_targeted
             self.apgd_targeted = APGDAttack_targeted(self.model, n_restarts=1, n_iter=100, verbose=False,
-                eps=self.epsilon, norm=self.norm, eot_iter=1, rho=.75, seed=self.seed, device=self.device)
+                eps=self.epsilon, norm=self.norm, eot_iter=1, rho=.75, seed=self.seed, device=self.device,
+                logger=self.logger)
     
         else:
             from .autopgd_base import APGDAttack
             self.apgd = APGDAttack(self.model, n_restarts=5, n_iter=100, verbose=False,
                 eps=self.epsilon, norm=self.norm, eot_iter=1, rho=.75, seed=self.seed, device=self.device,
-                is_tf_model=True)
+                is_tf_model=True, logger=self.logger)
             
             from .fab_tf import FABAttack_TF
             self.fab = FABAttack_TF(self.model, n_restarts=5, n_iter=100, eps=self.epsilon, seed=self.seed,
@@ -58,7 +63,7 @@ class AutoAttack():
             from .autopgd_base import APGDAttack_targeted
             self.apgd_targeted = APGDAttack_targeted(self.model, n_restarts=1, n_iter=100, verbose=False,
                 eps=self.epsilon, norm=self.norm, eot_iter=1, rho=.75, seed=self.seed, device=self.device,
-                is_tf_model=True)
+                is_tf_model=True, logger=self.logger)
     
         if version in ['standard', 'plus', 'rand']:
             self.set_version(version)
@@ -72,27 +77,41 @@ class AutoAttack():
     def get_seed(self):
         return time.time() if self.seed is None else self.seed
     
-    def run_standard_evaluation(self, x_orig, y_orig, bs=250):
+    def run_standard_evaluation(self, x_orig, y_orig, bs=250, return_labels=False):
         if self.verbose:
             print('using {} version including {}'.format(self.version,
                 ', '.join(self.attacks_to_run)))
+        
+        # checks on type of defense
+        if self.version != 'rand':
+            checks.check_randomized(self.get_logits, x_orig[:bs].to(self.device),
+                y_orig[:bs].to(self.device), bs=bs, logger=self.logger)
+        n_cls = checks.check_range_output(self.get_logits, x_orig[:bs].to(self.device),
+            logger=self.logger)
+        checks.check_dynamic(self.model, x_orig[:bs].to(self.device), self.is_tf_model,
+            logger=self.logger)
+        checks.check_n_classes(n_cls, self.attacks_to_run, self.apgd_targeted.n_target_classes,
+            self.fab.n_target_classes, logger=self.logger)
         
         with torch.no_grad():
             # calculate accuracy
             n_batches = int(np.ceil(x_orig.shape[0] / bs))
             robust_flags = torch.zeros(x_orig.shape[0], dtype=torch.bool, device=x_orig.device)
+            y_adv = torch.empty_like(y_orig)
             for batch_idx in range(n_batches):
                 start_idx = batch_idx * bs
                 end_idx = min( (batch_idx + 1) * bs, x_orig.shape[0])
 
                 x = x_orig[start_idx:end_idx, :].clone().to(self.device)
                 y = y_orig[start_idx:end_idx].clone().to(self.device)
-                output = self.get_logits(x)
-                correct_batch = y.eq(output.max(dim=1)[1])
+                output = self.get_logits(x).max(dim=1)[1]
+                y_adv[start_idx: end_idx] = output
+                correct_batch = y.eq(output)
                 robust_flags[start_idx:end_idx] = correct_batch.detach().to(robust_flags.device)
 
             robust_accuracy = torch.sum(robust_flags).item() / x_orig.shape[0]
-                
+            robust_accuracy_dict = {'clean': robust_accuracy}
+            
             if self.verbose:
                 self.logger.log('initial accuracy: {:.2%}'.format(robust_accuracy))
                     
@@ -164,36 +183,43 @@ class AutoAttack():
                     else:
                         raise ValueError('Attack not supported')
                 
-                    output = self.get_logits(adv_curr)
-                    false_batch = ~y.eq(output.max(dim=1)[1]).to(robust_flags.device)
+                    output = self.get_logits(adv_curr).max(dim=1)[1]
+                    false_batch = ~y.eq(output).to(robust_flags.device)
                     non_robust_lin_idcs = batch_datapoint_idcs[false_batch]
                     robust_flags[non_robust_lin_idcs] = False
 
                     x_adv[non_robust_lin_idcs] = adv_curr[false_batch].detach().to(x_adv.device)
-                
+                    y_adv[non_robust_lin_idcs] = output[false_batch].detach().to(x_adv.device)
+
                     if self.verbose:
                         num_non_robust_batch = torch.sum(false_batch)    
                         self.logger.log('{} - {}/{} - {} out of {} successfully perturbed'.format(
                             attack, batch_idx + 1, n_batches, num_non_robust_batch, x.shape[0]))
                 
                 robust_accuracy = torch.sum(robust_flags).item() / x_orig.shape[0]
+                robust_accuracy_dict[attack] = robust_accuracy
                 if self.verbose:
                     self.logger.log('robust accuracy after {}: {:.2%} (total time {:.1f} s)'.format(
                         attack.upper(), robust_accuracy, time.time() - startt))
                     
+            # check about square
+            checks.check_square_sr(robust_accuracy_dict, logger=self.logger)
+            
             # final check
             if self.verbose:
                 if self.norm == 'Linf':
-                    res = (x_adv - x_orig).abs().view(x_orig.shape[0], -1).max(1)[0]
+                    res = (x_adv - x_orig).abs().reshape(x_orig.shape[0], -1).max(1)[0]
                 elif self.norm == 'L2':
-                    res = ((x_adv - x_orig) ** 2).view(x_orig.shape[0], -1).sum(-1).sqrt()
+                    res = ((x_adv - x_orig) ** 2).reshape(x_orig.shape[0], -1).sum(-1).sqrt()
                 elif self.norm == 'L1':
-                    res = (x_adv - x_orig).abs().view(x_orig.shape[0], -1).sum(dim=-1)
+                    res = (x_adv - x_orig).abs().reshape(x_orig.shape[0], -1).sum(dim=-1)
                 self.logger.log('max {} perturbation: {:.5f}, nan in tensor: {}, max: {:.5f}, min: {:.5f}'.format(
                     self.norm, res.max(), (x_adv != x_adv).sum(), x_adv.max(), x_adv.min()))
                 self.logger.log('robust accuracy: {:.2%}'.format(robust_accuracy))
-        
-        return x_adv
+        if return_labels:
+            return x_adv, y_adv
+        else:
+            return x_adv
         
     def clean_accuracy(self, x_orig, y_orig, bs=250):
         n_batches = math.ceil(x_orig.shape[0] / bs)
@@ -209,7 +235,7 @@ class AutoAttack():
         
         return acc.item() / x_orig.shape[0]
         
-    def run_standard_evaluation_individual(self, x_orig, y_orig, bs=250):
+    def run_standard_evaluation_individual(self, x_orig, y_orig, bs=250, return_labels=False):
         if self.verbose:
             print('using {} version including {}'.format(self.version,
                 ', '.join(self.attacks_to_run)))
@@ -222,9 +248,13 @@ class AutoAttack():
         for c in l_attacks:
             startt = time.time()
             self.attacks_to_run = [c]
-            adv[c] = self.run_standard_evaluation(x_orig, y_orig, bs=bs)
+            x_adv, y_adv = self.run_standard_evaluation(x_orig, y_orig, bs=bs, return_labels=True)
+            if return_labels:
+                adv[c] = (x_adv, y_adv)
+            else:
+                adv[c] = x_adv
             if verbose_indiv:    
-                acc_indiv  = self.clean_accuracy(adv[c], y_orig, bs=bs)
+                acc_indiv  = self.clean_accuracy(x_adv, y_orig, bs=bs)
                 space = '\t \t' if c == 'fab' else '\t'
                 self.logger.log('robust accuracy by {} {} {:.2%} \t (time attack: {:.1f} s)'.format(
                     c.upper(), space, acc_indiv,  time.time() - startt))

@@ -13,7 +13,7 @@ import math
 import random
 
 from .other_utils import L0_norm, L1_norm, L2_norm
-
+from .checks import check_zero_gradients
 
 
 def L1_projection(x2, y2, eps1):
@@ -117,7 +117,8 @@ class APGDAttack():
             verbose=False,
             device=None,
             use_largereps=False,
-            is_tf_model=False):
+            is_tf_model=False,
+            logger=None):
         """
         AutoPGD implementation in PyTorch
         """
@@ -143,10 +144,17 @@ class APGDAttack():
         self.eps_orig = eps + 0.
         self.is_tf_model = is_tf_model
         self.y_target = None
-    
-    def init_hyperparam(self, x):
+        self.logger = logger
+
         assert self.norm in ['Linf', 'L2', 'L1']
         assert not self.eps is None
+
+        ### set parameters for checkpoints
+        self.n_iter_2 = max(int(0.22 * self.n_iter), 1)
+        self.n_iter_min = max(int(0.06 * self.n_iter), 1)
+        self.size_decr = max(int(0.03 * self.n_iter), 1)
+
+    def init_hyperparam(self, x):
 
         if self.device is None:
             self.device = x.device
@@ -154,16 +162,7 @@ class APGDAttack():
         self.ndims = len(self.orig_dim)
         if self.seed is None:
             self.seed = time.time()
-        
-        
-        
-        
-        
-        ### set parameters for checkpoints
-        self.n_iter_2 = max(int(0.22 * self.n_iter), 1)
-        self.n_iter_min = max(int(0.06 * self.n_iter), 1)
-        self.size_decr = max(int(0.03 * self.n_iter), 1)
-    
+
     def check_oscillation(self, x, j, k, y5, k3=0.75):
         t = torch.zeros(x.shape[1]).to(self.device)
         for counter5 in range(k):
@@ -177,23 +176,17 @@ class APGDAttack():
     def normalize(self, x):
         if self.norm == 'Linf':
             t = x.abs().view(x.shape[0], -1).max(1)[0]
-            return x / (t.view(-1, *([1] * self.ndims)) + 1e-12)
 
         elif self.norm == 'L2':
             t = (x ** 2).view(x.shape[0], -1).sum(-1).sqrt()
-            return x / (t.view(-1, *([1] * self.ndims)) + 1e-12)
 
         elif self.norm == 'L1':
             try:
                 t = x.abs().view(x.shape[0], -1).sum(dim=-1)
             except:
                 t = x.abs().reshape([x.shape[0], -1]).sum(dim=-1)
-            return x / (t.view(-1, *([1] * self.ndims)) + 1e-12)
-    
-    def lp_norm(self, x):
-        if self.norm == 'L2':
-            t = (x ** 2).view(x.shape[0], -1).sum(-1).sqrt()
-            return t.view(-1, *([1] * self.ndims))
+
+        return x / (t.view(-1, *([1] * self.ndims)) + 1e-12)
 
     def dlr_loss(self, x, y):
         x_sorted, ind_sorted = x.sort(dim=1)
@@ -289,6 +282,10 @@ class APGDAttack():
         grad /= float(self.eot_iter)
         grad_best = grad.clone()
 
+        if self.loss in ['dlr', 'dlr-targeted']:
+            # check if there are zero gradients
+            check_zero_gradients(grad, logger=self.logger)
+        
         acc = logits.detach().max(1)[1] == y
         acc_steps[0] = acc + 0
         loss_best = loss_indiv.detach().clone()
@@ -341,11 +338,11 @@ class APGDAttack():
                     x_adv_1 = x_adv + step_size * self.normalize(grad)
                     x_adv_1 = torch.clamp(x + self.normalize(x_adv_1 - x
                         ) * torch.min(self.eps * torch.ones_like(x).detach(),
-                        self.lp_norm(x_adv_1 - x)), 0.0, 1.0)
+                        L2_norm(x_adv_1 - x, keepdim=True)), 0.0, 1.0)
                     x_adv_1 = x_adv + (x_adv_1 - x_adv) * a + grad2 * (1 - a)
                     x_adv_1 = torch.clamp(x + self.normalize(x_adv_1 - x
                         ) * torch.min(self.eps * torch.ones_like(x).detach(),
-                        self.lp_norm(x_adv_1 - x)), 0.0, 1.0)
+                        L2_norm(x_adv_1 - x, keepdim=True)), 0.0, 1.0)
 
                 elif self.norm == 'L1':
                     grad_topk = grad.abs().view(x.shape[0], -1).sort(-1)[0]
@@ -353,8 +350,7 @@ class APGDAttack():
                     grad_topk = grad_topk[u, topk_curr].view(-1, *[1]*(len(x.shape) - 1))
                     sparsegrad = grad * (grad.abs() >= grad_topk).float()
                     x_adv_1 = x_adv + step_size * sparsegrad.sign() / (
-                        sparsegrad.sign().abs().view(x.shape[0], -1).sum(dim=-1).view(
-                        -1, *[1]*(len(x.shape) - 1)) + 1e-10)
+                        L1_norm(sparsegrad.sign(), keepdim=True) + 1e-10)
                     
                     delta_u = x_adv_1 - x
                     delta_p = L1_projection(x, delta_u, self.eps)
@@ -584,14 +580,15 @@ class APGDAttack_targeted(APGDAttack):
             verbose=False,
             device=None,
             use_largereps=False,
-            is_tf_model=False):
+            is_tf_model=False,
+            logger=None):
         """
         AutoPGD on the targeted DLR loss
         """
         super(APGDAttack_targeted, self).__init__(predict, n_iter=n_iter, norm=norm,
             n_restarts=n_restarts, eps=eps, seed=seed, loss='dlr-targeted',
             eot_iter=eot_iter, rho=rho, topk=topk, verbose=verbose, device=device,
-            use_largereps=use_largereps, is_tf_model=is_tf_model)
+            use_largereps=use_largereps, is_tf_model=is_tf_model, logger=logger)
 
         self.y_target = None
         self.n_target_classes = n_target_classes

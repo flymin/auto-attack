@@ -151,3 +151,10 @@ Thumbs.db
 
 
 # End of https://www.toptal.com/developers/gitignore/api/python
+data/
+/__pycache__/
+*/__pycache__/
+
+build/
+dist/
+*.egg-info/

@@ -13,8 +13,8 @@ from __future__ import unicode_literals
 import time
 
 import torch
-from torch.autograd.gradcheck import zero_gradients
 
+from .other_utils import zero_gradients
 from .fab_base import FABAttack
 
 class FABAttack_PT(FABAttack):
